@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RedMoon PDF — compress a PDF without uploading it</title>
+<meta name="description" content="Compress a PDF to a target size in your browser. The file never leaves your device.">
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <div class="brand">
+      <span class="moon" aria-hidden="true"></span>
+      <div>
+        <strong>RedMoon PDF</strong>
+        <span>Compression that never uploads your file</span>
+      </div>
+    </div>
+    <a class="src" href="https://github.com/codicsystems/redmoon-pdf" rel="noopener">Source</a>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="lede">
+    <h1>Make a PDF smaller, without giving it away</h1>
+    <p>
+      Drop in a file, choose the size you need, and get it back in seconds.
+      Everything happens inside this browser tab — there is no server, no upload,
+      and no request that carries your document anywhere.
+    </p>
+  </section>
+
+  <!-- ── drop zone ─────────────────────────────────────────────────────── -->
+  <section id="dropZone" class="drop" tabindex="0" role="button"
+           aria-label="Choose a PDF file, or drop one here">
+    <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden>
+    <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M12 16V4m0 0L8 8m4-4l4 4"/>
+      <path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/>
+    </svg>
+    <p class="drop-main">Drop a PDF here, or click to choose</p>
+    <p class="drop-sub">Up to 200 MB · nothing is uploaded</p>
+  </section>
+
+  <!-- ── controls ──────────────────────────────────────────────────────── -->
+  <section id="controls" class="panel hidden">
+    <div class="filerow">
+      <div class="fileinfo">
+        <strong id="fileName">document.pdf</strong>
+        <span id="fileMeta">— · — pages</span>
+      </div>
+      <button class="btn ghost" id="clearBtn" type="button">Choose another</button>
+    </div>
+
+    <div class="field">
+      <span class="label">How small do you need it?</span>
+      <div class="modes" role="radiogroup" aria-label="Target mode">
+        <label><input type="radio" name="mode" value="percent" checked><span>Percentage</span></label>
+        <label><input type="radio" name="mode" value="size"><span>Exact size</span></label>
+        <label><input type="radio" name="mode" value="quality"><span>Quality</span></label>
+      </div>
+    </div>
+
+    <div class="field" id="percentField">
+      <label for="percent">Target: <b><span id="percentOut">50</span>%</b> of the original</label>
+      <input type="range" id="percent" min="10" max="90" step="5" value="50">
+      <p class="hint">Roughly <span id="percentBytes">—</span> when we are done.</p>
+    </div>
+
+    <div class="field hidden" id="sizeField">
+      <label for="targetSize">Target size</label>
+      <div class="inline">
+        <input type="number" id="targetSize" min="0.05" step="0.05" value="2">
+        <select id="sizeUnit">
+          <option value="1048576" selected>MB</option>
+          <option value="1024">KB</option>
+        </select>
+      </div>
+      <p class="hint">We search for the highest quality that still fits under this.</p>
+    </div>
+
+    <div class="field hidden" id="qualityField">
+      <label for="quality">Image quality: <b><span id="qualityOut">70</span></b></label>
+      <input type="range" id="quality" min="20" max="95" step="5" value="70">
+      <p class="hint">A single pass at a fixed quality. Fastest option.</p>
+    </div>
+
+    <details class="advanced">
+      <summary>Advanced</summary>
+      <div class="field">
+        <label for="maxDpi">Maximum resolution: <b><span id="dpiOut">150</span> DPI</b></label>
+        <input type="range" id="maxDpi" min="72" max="300" step="6" value="150">
+        <p class="hint">
+          150 DPI is right for screen reading and ordinary printing. Drop to 96
+          for documents that will only ever be viewed. Raise to 300 only if the
+          result will be printed at full size.
+        </p>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="grayscale">
+        <span>Convert to greyscale
+          <small>Often a large saving on scans and text documents. Removes all colour.</small>
+        </span>
+      </label>
+    </details>
+
+    <button class="btn primary block" id="compressBtn" type="button">Compress</button>
+
+    <div class="notice" id="warnBig" hidden>
+      This is a large file. Compression happens on your device, so it will use
+      memory and may take a minute. Close other heavy tabs first.
+    </div>
+  </section>
+
+  <!-- ── progress ──────────────────────────────────────────────────────── -->
+  <section id="progress" class="panel hidden">
+    <div class="spread">
+      <strong id="progressLabel">Working…</strong>
+      <span class="muted" id="progressPct">0%</span>
+    </div>
+    <div class="bar-track"><i id="progressBar"></i></div>
+    <p class="hint" id="progressDetail">Reading the document</p>
+    <button class="btn ghost" id="cancelBtn" type="button">Cancel</button>
+  </section>
+
+  <!-- ── result ────────────────────────────────────────────────────────── -->
+  <section id="result" class="panel hidden">
+    <div class="result-head">
+      <div>
+        <span class="label">Done</span>
+        <div class="sizes">
+          <span id="beforeSize">—</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-6-6l6 6-6 6"/></svg>
+          <strong id="afterSize">—</strong>
+        </div>
+        <p class="saving" id="savingLine">—</p>
+      </div>
+      <div class="donut" id="donut" style="--pct:0">
+        <span id="donutPct">0%</span>
+      </div>
+    </div>
+
+    <div class="notice warn hidden" id="missedTarget"></div>
+
+    <div class="actions">
+      <button class="btn primary" id="downloadBtn" type="button">Download</button>
+      <button class="btn" id="againBtn" type="button">Try different settings</button>
+    </div>
+
+    <p class="hint" id="resultNote"></p>
+  </section>
+
+  <div class="notice error hidden" id="errorBox" role="alert"></div>
+
+  <!-- ── how it works ──────────────────────────────────────────────────── -->
+  <section class="explain">
+    <h2>How it works, and what it does to your file</h2>
+    <p>
+      Each page is rendered to a canvas at a resolution capped by your DPI
+      setting, re-encoded as a JPEG at a chosen quality, and written into a new
+      PDF. When you ask for an exact size, the same process runs repeatedly with
+      a binary search over quality and scale until the result fits.
+    </p>
+    <p>
+      <strong>The trade-off:</strong> pages become images. The file gets
+      substantially smaller and looks the same at normal reading size, but text
+      is no longer selectable or searchable, and links, forms and bookmarks are
+      lost. That is the right trade for a scan, a portfolio, or a document you
+      need to email. It is the wrong trade for a contract someone needs to search
+      or a form someone needs to fill in.
+    </p>
+    <p>
+      If your PDF is mostly text and already small, this tool may make it
+      <em>larger</em>. It will tell you if that happens rather than handing you a
+      worse file.
+    </p>
+    <h3>Why it runs in your browser</h3>
+    <p>
+      PDFs are one of the most sensitive things people compress — contracts,
+      passports, medical records, bank statements. Every free online compressor
+      requires you to upload all of that to a stranger's server. There is no
+      technical reason for it. Everything here happens locally, which you can
+      verify by opening your browser's network tab and watching nothing leave.
+    </p>
+  </section>
+
+</main>
+
+<footer class="foot wrap">
+  <p>
+    Open source under MIT ·
+    <a href="https://github.com/codicsystems/redmoon-pdf" rel="noopener">GitHub</a> ·
+    Built by <a href="https://codicsystems.com" rel="noopener">Codic Systems</a>
+  </p>
+</footer>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/pdf-lib.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
